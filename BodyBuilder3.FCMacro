@@ -23,7 +23,7 @@ import Draft
 import string
 import DraftVecUtils
 
-Version_name = "BodyBuilder3"
+Version_name = "BodyBuilder4"
 
 doc = FreeCAD.ActiveDocument                   
 if doc == None:
