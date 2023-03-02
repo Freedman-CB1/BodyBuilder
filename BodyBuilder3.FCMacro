@@ -448,11 +448,11 @@ class cbToolBox(QtGui.QDockWidget):
             except:    return
             if obj.TypeId != "PartDesign::Body": 
                 obj= obj.getParentGeoFeatureGroup() 
-                if hasattr(obj.ViewObject,'Transparency'):
-                    if obj.ViewObject.Transparency == 0:
-                        obj.ViewObject.Transparency = 62 
-                    elif obj.ViewObject.Transparency == 62:
-                        obj.ViewObject.Transparency = 0 
+            if hasattr(obj.ViewObject,'Transparency'):
+                if obj.ViewObject.Transparency == 0:
+                    obj.ViewObject.Transparency = 62 
+                elif obj.ViewObject.Transparency == 62:
+                    obj.ViewObject.Transparency = 0 
 
     def on_x_offset(self):
         if self.generic_sel != None:
