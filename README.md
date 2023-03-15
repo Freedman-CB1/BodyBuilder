@@ -1,4 +1,5 @@
 # BodyBuilder for FreeCAD
+See image "menu structure"
 
 Usage:
 By creating a binding of a Body to a Sketch the macro will keep them attached, the binding is an aligninment of the Body origin to the sketch 
