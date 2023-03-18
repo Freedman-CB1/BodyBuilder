@@ -9,18 +9,22 @@ Two important things about selection, (read at least twice):
 2) While in the Positioning and Binding menus, selections in the 3D space are normally a face selection, the macro will convert the selection to 
 the entire body. This means that if you need to select a face you will need to go to the Main menu.
 
-Instead of me writing a bunch of stuff I will do a quest and answer, I will do both sides until I get other input.
+Instead of me writing a bunch of stuff I will do a question and answer, I will do both sides until I get other input.
 
 1) Question: What if I exit the macro and move objects, what happens when I start the macro?
-Ans: At startup the macro won't move objects. As soon as edit a binding or move a bound object the macro will stay up-to-date. So to answer, you would need to start the macro and then click on "Update Model".
+Ans: At startup the macro won't move objects. As soon as you edit a binding or move a bound object the macro will stay up-to-date. So to answer, you would need to start the macro and then click on "Update Model".
+
 2 Question: Can I use the macro to move objects and then delete all the data.
-Ans: Yes, You can build a model and move all the Bodies to where you want them, then delete each bound objects Binding and then it's Properties. You will loose the binding data but the objects will stay where put. There would no trace the macro was ever used.
+Ans: Yes, You can build a model and move all the Bodies to where you want them, then delete each bound objects Binding and then it's Properties. You will loose the binding data but the objects will stay where put. There would be no trace the macro was ever used.
+
 3) Question: I seem to have a problem when I delete objects that were used as a Sketch target, Bodies were bound to deleted Sketches.
-Ans: This is being worked on currently, there are different situations so I am working on how to handle deletions.
-4) Question: Can the data be viewed.
-Ans: Property panel and use "show all" on a Bound Body selection, you will see the added properties. The BindTo property holds the Sketch object, so the Body holds the binding data and it shows what Sketch it is attached to. Actually all the offsets, rotate and orbit data can be changed in the properties panel, no dialog required.
+Ans: This is being worked on currently, there are different situations so I am working on how to handle various deletions. 
+
+4) Question: Can the binding data be viewed.
+Ans: Property panel and use "show all" on a Bound Body selection, you will see the added properties. he Body holds the binding data and it shows what Sketch it is attached to in "BindTo". Actually all the offsets, rotate and orbit data can be changed in the properties panel, no dialog required.
+
 5) Question: What is the best first time procedure to start.
-Ans: Start Macro, New doc, new body, new sketch XY Plane. Draw a box (about the origin) and Pad it 10mm. Select the Body and use Transform to move it out of the way. New Body, new Sketch, draw a circle XY plane (about the origin) and Pad it 100mm. On the dialog click "To positioning", then click "Edit binding", in the Tree expand the box body so you can see Sketch. Select the round peg in the 3D, then select the Sketch in the tree, this should create a binding, the peg will move and tree will show the what sketch the body is bound to in the description field.  
+Ans: Start Macro, New doc, new body, new sketch XY Plane. Draw a box (about the origin) and Pad it 10mm. Select the Body and use Transform to move it out of the way. New Body, new Sketch, draw a circle XY plane (about the origin) and Pad it 100mm. On BodyBuilder click "To positioning", then click "Edit binding", in the Tree expand the box body so you can see Sketch, don't open it. Select the round peg in the 3D, then select the Sketch in the tree, this should create a binding, the peg will move and tree will show the what sketch the body is bound to in the description field.  
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
 MAIN MENU:
