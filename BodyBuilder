@@ -11,7 +11,7 @@ __Title__=""
 __Author__ = "freedman"
 __Version__ = ""
 __Date__    = "3/01/2023"
-__Requires__ = "Built on 21.
+__Requires__ = "Built on 21."
 __Communication__ = "User:freedman" 
 
 from PySide import QtGui,QtCore
