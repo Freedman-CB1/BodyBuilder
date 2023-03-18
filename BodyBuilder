@@ -23,7 +23,7 @@ import Draft
 import string
 import DraftVecUtils
 
-Version_name = "BodyBuilder4.2"
+Version_name = "BodyBuilder4.3"
 
 doc = FreeCAD.ActiveDocument                   
 if doc == None:
@@ -968,11 +968,12 @@ class cbToolBox(QtGui.QDockWidget):
     
                 if obj.TypeId == "App::Part":   # No Part container selecting while in edit mode
                #     print("clear")
-                    Gui.Selection.clearSelection()                
+                    Gui.Selection.clearSelection() 
+            self.sketch_vertex_mover(obj)
+            
 
   ###########   page 2    
         if self.dialog_page == 2: 
-            self.sketch_vertex_mover(obj)
             if str(type(obj)) == "<class 'PartDesign.Feature'>"  or  obj.TypeId == "PartDesign::Body": # and not obj.TypeId == "App::Part": 
                 if obj.TypeId != "PartDesign::Body":
                     self.body_of = obj.getParentGeoFeatureGroup()  
