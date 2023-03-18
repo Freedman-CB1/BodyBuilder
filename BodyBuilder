@@ -1,0 +1,1441 @@
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as 
+# published by the Free Software Foundation, either version 3 of the 
+# License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+ # --------------------
+__Title__=""
+__Author__ = "freedman"
+__Version__ = ""
+__Date__    = "3/01/2023"
+__Requires__ = "Built on 21.
+__Communication__ = "User:freedman" 
+
+from PySide import QtGui,QtCore
+import PartDesignGui
+import FreeCAD as App
+import FreeCADGui as gui
+import Part, time, math
+import Draft
+import string
+import DraftVecUtils
+
+Version_name = "BodyBuilder4.2"
+
+doc = FreeCAD.ActiveDocument                   
+if doc == None:
+    doc = FreeCAD.newDocument()
+
+if Gui.getMainWindow().findChild(QtGui.QWidget, Version_name):    # all ready running test
+    print("The Macro is already running.....")
+    exit()
+
+class cbToolBox(QtGui.QDockWidget):
+    def __init__(self, parent = Gui.getMainWindow()):
+        global Version_name 
+        self.dialog_width = 200   # DIALOG WIDTH  DIALOG WIDTH  DIALOG WIDTH  DIALOG WIDTH  DIALOG WIDTH      
+        self.dialog_height = 650   # DIALOG HEIGHT  DIALOG HEIGHT  DIALOG HEIGHT  DIALOG HEIGHT  
+
+        myw = Gui.getMainWindow()   
+        self.reporting = myw.findChild(QtGui.QTextEdit, "Report view")
+        self.reporting.clear()
+
+        super(cbToolBox, self).__init__(parent, QtCore.Qt.Tool)
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+        self.setAttribute(QtCore.Qt.WA_WindowPropagation, True)
+        self.setAutoFillBackground(True)
+        self.setObjectName(Version_name )
+        self.setWindowTitle(Version_name)
+
+        self.paste_list = []
+        self.delete_list = []
+        self.lock2 = False  # lock for assy routine
+        self.body_source = None   # selected body 
+        self.sketch_target = None   # selected sketch
+        self.generic_sel = None
+        self.dialog_page = 1
+
+        self.in_sketcher = False
+        self.in_process_click = False   # lock for mouse selection rountine
+        self.task_state = 0 
+        self.Button2_pointer = 0
+        self.paste_offset = 0
+        self.checked_3d = False
+        self.dialog_size = 1
+        self.restrict_call = False
+        self.axis_num =0
+        self.past_selection = None
+        self.select = None
+        self.step_val = 1
+        self.pass_click = False
+        
+  
+
+
+        mw=Gui.getMainWindow()
+        mw.workbenchActivated.connect(self.wbChange)
+
+        self.timer2 = QtCore.QTimer()
+        self.timer2.timeout.connect(self.timed_out2) 
+
+        self.timer3 = QtCore.QTimer()
+        self.timer3.timeout.connect(self.timed_out3) 
+
+        self.timer4 = QtCore.QTimer()
+        self.timer4.timeout.connect(self.timed_out4) 
+
+        self.timer5 = QtCore.QTimer()
+        self.timer5.timeout.connect(self.timed_out5)
+ 
+        self.timer6 = QtCore.QTimer()
+        self.timer6.timeout.connect(self.timed_out6) 
+
+
+        self.get_sketcher_settings()
+        self.paste_list.clear()
+        Gui.Selection.clearSelection()
+
+        self.build_main_dialog()
+
+        self.on_toggle_dialog()  # make the dialog, not just a toggle
+
+#        self.on_toggle_dialog()
+#        self.on_bind_dialog()
+
+    
+    def build_main_dialog(self):        # first dialog page
+        self.wid = QtGui.QWidget()
+        self.lay = QtGui.QVBoxLayout()
+        self.lay.setContentsMargins(1,1,1,1)
+        
+        self.setStyleSheet("background-color:burlywood;") 
+        self.setMaximumWidth(self.dialog_width) 
+        self.setMaximumHeight(self.dialog_height + self.dialog_size)   
+        self.dialog_size += 1 # don't know why but adding 1 to the rebuild of the dialog 
+        if self.dialog_size > 1:  # resets the screen so colors don't get weird
+            self.dialog_size = 0 
+       
+        self.button_close= QtGui.QCheckBox("Exit macro",self)
+        self.button_close.clicked.connect(self.on_exit) 
+        if self.dialog_page == 2:      
+            self.lay.addWidget(self.button_close)
+        self.button_close.setStyleSheet( "color:black;")
+
+        if self.dialog_page == 1 or self.dialog_page == 3:
+            self.toggle_dialog = QtGui.QPushButton("  To main   " ,self)
+            self.lay.addWidget(self.toggle_dialog)
+        elif self.dialog_page == 2:
+            self.toggle_dialog = QtGui.QPushButton("To Positioning" ,self)
+            self.lay.addWidget(self.toggle_dialog)
+        self.toggle_dialog.clicked.connect(self.on_toggle_dialog)
+        self.toggle_dialog.setStyleSheet( "color:black;")
+
+        self.set_3d = QtGui.QCheckBox("Sketch 3D View" ,self)
+        self.lay.addWidget(self.set_3d)
+        self.set_3d.clicked.connect(self.on_set_3d)
+        self.set_3d.setStyleSheet( "color:black;")
+        self.set_3d.setStyleSheet("background-color:gold;")  
+
+        self.vis_dev = QtGui.QPushButton("X-ray Selected" ,self)
+        self.vis_dev.clicked.connect(self.on_transparent) 
+        self.lay.addWidget(self.vis_dev)
+        self.vis_dev.setStyleSheet("color:darkviolet;")
+
+        if self.dialog_page == 1:
+            self.bind_dialog = QtGui.QPushButton(" Edit Binding " ,self)
+            self.lay.addWidget(self.bind_dialog)
+        elif self.dialog_page == 3:
+            self.bind_dialog = QtGui.QPushButton("To Positioning" ,self)
+            self.lay.addWidget(self.bind_dialog)
+        self.bind_dialog.clicked.connect(self.on_bind_dialog)
+        self.bind_dialog.setStyleSheet( "color:black;")     
+        
+        
+        if self.dialog_page == 3: 
+            self.line10 = QtGui.QLabel("~~ Builder ~~", self)
+            self.lay.addWidget(self.line10)
+            self.line10.setStyleSheet( "color:blue;")
+
+
+        self.instruct_line = QtGui.QLabel("", self)
+        if self.dialog_page == 3: 
+            self.lay.addWidget(self.instruct_line)
+            self.config_edit_button(2)
+
+        self.del_button = QtGui.QPushButton("  ----------  " ,self)
+        if self.dialog_page == 3:
+            self.lay.addWidget(self.del_button)
+        self.del_button.clicked.connect(self.on_del_button)
+        self.del_button.setStyleSheet( "color:black;")
+        self.del_button.setStyleSheet("background-color:khaki;")  
+        self.del_button.setEnabled(False)
+
+        self.line = QtGui.QLabel("~   Offset   ~", self)  ################   Offset
+        self.line.setStyleSheet( "color:red;")
+        self.line.setStyleSheet("background-color:honeydew;")  
+        self.line.setStyleSheet( "color:blue;")
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.line)
+
+        self.x_offset = QtGui.QDoubleSpinBox(self) 
+        self.x_offset.setDecimals(5)
+        self.x_offset.setMaximum(5000)
+        self.x_offset.setMinimum(-5000)
+        self.x_offset.setKeyboardTracking(False)
+        self.x_offset.setStyleSheet("background-color:burlywood;")  
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.x_offset)
+        self.x_offset.setPrefix("X: ")
+        self.x_offset.valueChanged.connect(self.on_x_offset)
+        self.x_offset.setEnabled(False)
+
+        self.y_offset = QtGui.QDoubleSpinBox(self) 
+        self.y_offset.setDecimals(5)
+        self.y_offset.setMaximum(5000)
+        self.y_offset.setMinimum(-5000)
+        self.y_offset.setKeyboardTracking(False)
+        self.y_offset.setStyleSheet("background-color:burlywood;")  
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.y_offset)
+        self.y_offset.setPrefix("Y: ")
+        self.y_offset.valueChanged.connect(self.on_y_offset)
+        self.y_offset.setEnabled(False)
+
+        self.z_offset = QtGui.QDoubleSpinBox(self) 
+        self.z_offset.setDecimals(5)
+        self.z_offset.setMaximum(5000)
+        self.z_offset.setMinimum(-5000)
+        self.z_offset.setKeyboardTracking(True)
+        self.z_offset.setStyleSheet("background-color:burlywood;")  
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.z_offset)
+        self.z_offset.setPrefix("Z: ")
+        self.z_offset.valueChanged.connect(self.on_z_offset)
+        self.z_offset.setEnabled(False)
+
+        self.line = QtGui.QLabel("~  Rotation ~", self)  ################   Rotation
+        self.line.setStyleSheet( "color:red;")
+        self.line.setStyleSheet("background-color:honeydew;")  
+        self.line.setStyleSheet( "color:blue;")
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.line)
+
+        self.z_rotation = QtGui.QDoubleSpinBox(self) 
+        self.z_rotation.setDecimals(5)
+        self.z_rotation.setMaximum(5000)
+        self.z_rotation.setMinimum(-5000)
+        self.z_rotation.setPrefix("Z: ")
+        self.z_rotation.setSuffix("\u00b0")
+        self.z_rotation.setKeyboardTracking(False)
+        self.z_rotation.setStyleSheet("background-color:burlywood;")  
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.z_rotation)
+        self.z_rotation.valueChanged.connect(self.on_z_rotation)
+        self.z_rotation.setEnabled(False)
+
+        self.y_rotation = QtGui.QDoubleSpinBox(self) 
+        self.y_rotation.setDecimals(5)
+        self.y_rotation.setMaximum(5000)
+        self.y_rotation.setMinimum(-5000)
+        self.y_rotation.setPrefix("Y: ")
+        self.y_rotation.setSuffix("\u00b0")
+        self.y_rotation.setKeyboardTracking(False)
+        self.y_rotation.setStyleSheet("background-color:burlywood;")  
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.y_rotation)
+        self.y_rotation.valueChanged.connect(self.on_y_rotation)
+        self.y_rotation.setEnabled(False)
+
+
+        self.x_rotation = QtGui.QDoubleSpinBox(self) 
+        self.x_rotation.setDecimals(5)
+        self.x_rotation.setMaximum(5000)
+        self.x_rotation.setMinimum(-5000)
+        self.x_rotation.setPrefix("X: ")
+        self.x_rotation.setSuffix("\u00b0")
+        self.x_rotation.setKeyboardTracking(False)
+        self.x_rotation.setStyleSheet("background-color:burlywood;")  
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.x_rotation)
+        self.x_rotation.valueChanged.connect(self.on_x_rotation)
+        self.x_rotation.setEnabled(False)
+
+        self.line = QtGui.QLabel("~  Orbital  ~", self)  ################   Orbital
+        self.line.setStyleSheet("background-color:honeydew;")  
+        self.line.setStyleSheet( "color:blue;")
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.line)
+
+        self.axis_Zrot = QtGui.QDoubleSpinBox(self) 
+        self.axis_Zrot.setDecimals(5)
+        self.axis_Zrot.setMaximum(5000)
+        self.axis_Zrot.setMinimum(-5000)
+        self.axis_Zrot.setKeyboardTracking(False)
+        self.axis_Zrot.setStyleSheet("background-color:khaki;")  
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.axis_Zrot)
+        self.axis_Zrot.valueChanged.connect(self.on_axis_Zrot)
+        self.axis_Zrot.setEnabled(False)
+        self.axis_Zrot.setStyleSheet( "color:gray;")
+        self.axis_Zrot.setPrefix("Z: ")
+        self.axis_Zrot.setSuffix("\u00b0")
+
+        self.axis_Xrot = QtGui.QDoubleSpinBox(self) 
+        self.axis_Xrot.setDecimals(5)
+        self.axis_Xrot.setMaximum(5000)
+        self.axis_Xrot.setMinimum(-5000)
+        self.axis_Xrot.setKeyboardTracking(False)
+        self.axis_Xrot.setStyleSheet("background-color:khaki;")  
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.axis_Xrot)
+        self.axis_Xrot.valueChanged.connect(self.on_axis_Xrot)
+        self.axis_Xrot.setEnabled(False)
+        self.axis_Xrot.setPrefix("X: ")
+        self.axis_Xrot.setStyleSheet( "color:gray;")
+        self.axis_Xrot.setSuffix("\u00b0")
+
+        self.axis_Yrot = QtGui.QDoubleSpinBox(self) 
+        self.axis_Yrot.setDecimals(5)
+        self.axis_Yrot.setMaximum(5000)
+        self.axis_Yrot.setMinimum(-5000)
+        self.axis_Yrot.setKeyboardTracking(False)
+        self.axis_Yrot.setSingleStep(10)
+        self.axis_Yrot.setStyleSheet("background-color:khaki;")  
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.axis_Yrot)
+        self.axis_Yrot.valueChanged.connect(self.on_axis_Yrot)
+        self.axis_Yrot.setEnabled(False)
+        self.axis_Yrot.setPrefix("Y: ")
+        self.axis_Yrot.setStyleSheet( "color:gray;")
+        self.axis_Yrot.setSuffix("\u00b0")
+
+        self.line = QtGui.QLabel("~ Sketch Origin ~", self)
+        if self.dialog_page == 2:
+            self.lay.addWidget(self.line)
+        self.line.setStyleSheet("background-color:honeydew;")  
+        self.line.setStyleSheet( "color:blue;")
+
+        self.sketch_x_offset = QtGui.QLabel("X: ____", self)
+        if self.dialog_page ==2: 
+            self.lay.addWidget(self.sketch_x_offset)
+        self.sketch_x_offset.setEnabled(False)
+        self.sketch_x_offset.setStyleSheet( "color:gray;")
+
+        self.sketch_y_offset = QtGui.QLabel("Y: ____", self)
+        if self.dialog_page ==2: 
+            self.lay.addWidget(self.sketch_y_offset)
+        self.sketch_y_offset.setEnabled(False)
+        self.sketch_y_offset.setStyleSheet( "color:gray;")
+
+        self.origin_mover = QtGui.QCheckBox("Reposition\nSketch origin",self)
+        self.origin_mover.clicked.connect(self.on_origin_mover)  
+        if self.dialog_page == 1:  
+            self.lay.addWidget(self.origin_mover)
+        if self.in_sketcher == False:
+            self.origin_mover.setStyleSheet( "color:gray;")
+
+        self.paste_lock = QtGui.QCheckBox(" Paste with Binding " ,self)
+        if self.dialog_page == 3 or self.dialog_page == 1:
+            self.lay.addWidget(self.paste_lock)
+        self.paste_lock.setStyleSheet( "color:black;")
+
+        self.field_step = QtGui.QCheckBox(" Input step = 1 " ,self)
+        if self.dialog_page == 1:
+            self.lay.addWidget(self.field_step)
+        self.field_step.clicked.connect(self.on_field_step) 
+        self.field_step.setStyleSheet( "color:black;")
+        self.set_step(self.step_val)      
+        self.my_text = " Input step = " + str(self.step_val) 
+        self.field_step.setText(self.my_text)
+
+############   face ref. sketch needs face selection so it can only go in page 2
+        self.face_sketch = QtGui.QCheckBox("Face Ref. Sketch" ,self)
+        if self.dialog_page == 2:
+            self.lay.addWidget(self.face_sketch)
+        self.face_sketch.clicked.connect(self.on_face_sketch)
+        self.face_sketch.setStyleSheet( "color:black;")
+    #    self.face_sketch.setEnabled(False)
+
+        self.single_run = QtGui.QPushButton("Update Model" ,self)
+        if self.dialog_page == 1 or self.dialog_page == 2: 
+            self.lay.addWidget(self.single_run)
+        self.single_run.clicked.connect(self.on_manual_update)
+        self.single_run.setStyleSheet( "color:black;")
+
+        self.wid.setLayout(self.lay)
+        self.my_wid = self.setWidget(self.wid)
+        for chi in self.wid.children():      #   align buttons
+            self.lay.setAlignment(chi, QtCore.Qt.AlignHCenter)
+        self.setFixedSize(self.lay.sizeHint())
+
+        
+        try:
+            obj =  FreeCADGui.Selection.getSelection()[0]
+            self.body_source = obj
+            if obj.TypeId == "PartDesign::Body":  # the code addselection() triggers selection again with a body object
+                if hasattr(obj,'Conx_BindTo'):    # if binding
+                    if obj.Conx_BindTo != None:
+                        self.set_ob_selects(True)
+                        self.update_inputs(obj)
+        except:    None
+
+#######################################################################
+#   END OF DIALOG SETUP
+########################################################################
+
+    def on_field_step(self):
+        self.field_step.setChecked(True)
+        if self.step_val == 1:
+            self.step_val = 5
+        elif self.step_val == 5:
+            self.step_val = 10
+        elif self.step_val == 10:
+            self.step_val = 15        
+        elif self.step_val == 15:
+            self.step_val = 1
+            self.field_step.setChecked(False)
+    
+        self.set_step(self.step_val)      
+        self.my_text = " Input step = " + str(self.step_val) 
+        self.field_step.setText(self.my_text)
+       
+    
+    def set_step(self,step_value):
+        self.x_rotation.setSingleStep(step_value)
+        self.y_rotation.setSingleStep(step_value)
+        self.z_rotation.setSingleStep(step_value)
+        self.axis_Zrot.setSingleStep(step_value)
+        self.axis_Xrot.setSingleStep(step_value)
+        self.axis_Yrot.setSingleStep(step_value)
+        self.x_offset.setSingleStep(step_value)
+        self.y_offset.setSingleStep(step_value)
+        self.z_offset.setSingleStep(step_value)
+
+    def on_face_sketch(self):
+        self.face_sketch.setChecked(False)
+        try:  
+            obj = FreeCADGui.Selection.getSelection()[0]
+            self.make_sketch()
+                       
+        except:    
+            print("Need planar or selected Face")  #None
+
+    def make_sketch(self):
+        doc = FreeCAD.ActiveDocument
+        current_workbench = Gui.activeWorkbench().name()
+        doc = App.ActiveDocument
+        body = Gui.ActiveDocument.ActiveView.getActiveObject('pdbody') 
+        sel = FreeCADGui.Selection.getSelectionEx()[0]
+        pipe = sel.Object
+        sel = FreeCADGui.Selection.getSelectionEx()
+        try:
+            face = pipe.getSubObject(sel[0].SubElementNames[0])
+        except:
+             return
+        Draft.draftify(face, makeblock=False, delete=True)
+        self.sketch = Draft.makeSketch(face, autoconstraints = False, addTo = None, delete = False,  name = "Sketch", radiusPrecision = -1)
+
+        self.activeBody = Gui.ActiveDocument.ActiveView.getActiveObject('pdbody')
+        if self.activeBody is None:
+            return []
+
+        if current_workbench == "PartDesignWorkbench":    
+            body.ViewObject.dropObject(self.sketch, self.activeBody, "", [])
+
+        Gui.Selection.addSelection(doc.Name,self.sketch.Name) 
+        x_vec_old = self.sketch.Placement.Rotation.multVec(App.Vector(1, 0, 0))
+        self.sketch.Support = [(pipe, (sel[0].SubElementNames[0], ))]
+        self.sketch.MapMode = "FlatFace"
+        
+        x_vec_new = self.sketch.Placement.Rotation.multVec(App.Vector(1, 0, 0))
+        ang = DraftVecUtils.angle(x_vec_new, x_vec_old, face.normalAt(0, 0))
+        self.sketch.AttachmentOffset.Rotation.Angle = ang
+        doc = App.ActiveDocument    
+        doc.recompute()
+        self.doc = FreeCAD.ActiveDocument
+        target =  self.sketch.Name  + "."
+        if current_workbench == "PartDesignWorkbench":   
+            Gui.Selection.addSelection(doc.Name,body.Name,target)
+        elif current_workbench == "PartWorkbench":
+            Gui.Selection.addSelection(self.doc.Name,obj.Name)  
+        App.ActiveDocument.recompute()
+        App.ActiveDocument.recompute()
+        Gui.Selection.clearSelection()
+        return(self.sketch)      
+      
+
+    def start_assy_dialog(self):
+        self.config_edit_button(2)
+        self.config_delete_button(0)
+        Gui.Selection.clearSelection() 
+
+    def on_select_body(self):
+        Gui.Selection.clearSelection()
+
+      
+    def on_set_3d(self):
+        if self.set_3d.isChecked():
+            self.set_3D_settings()
+        else:
+            self.set_sketcher_settings()
+        if self.in_sketcher == True:
+            if self.set_3d.isChecked():
+                self.set_3D_settings()
+                Gui.ActiveDocument.ActiveView.setCamera(self.Saved_view_1 )
+            else:
+                self.set_sketcher_settings()
+                Gui.ActiveDocument.ActiveView.setCameraOrientation(App.Placement(Gui.editDocument().EditingTransform).Rotation.Q)            
+
+    def on_toggle_dialog(self):
+        if self.set_3d.isChecked():
+            self.checked_3d = True   # keeps the 3D sketch view consistant thru dialogs
+        else:
+            self.checked_3d = False 
+        if self.dialog_page == 1 or self.dialog_page == 3:
+            self.dialog_page = 2  
+            self.build_main_dialog()
+            self.move(Gui.getMainWindow().frameGeometry().right()-180, Gui.getMainWindow().frameGeometry().top()+101) 
+      #      Gui.Selection.clearSelection()
+        else:
+            self.dialog_page = 1
+            self.build_main_dialog()
+            self.move(Gui.getMainWindow().frameGeometry().right()/4 *3, Gui.getMainWindow().frameGeometry().top()+271)  # was 800
+ #      Gui.Selection.clearSelection()
+        self.setMaximumHeight(self.dialog_height) 
+
+        if self.checked_3d == True:
+            self.set_3d.setChecked(True)
+        else:
+            self.set_3d.setChecked(False) 
+
+    def on_bind_dialog(self):
+        if self.set_3d.isChecked():
+            self.checked_3d = True   # keeps the 3D sketch view consistant thru dialogs
+        else:
+            self.checked_3d = False 
+        if self.dialog_page == 1:
+            self.dialog_page = 3  
+            self.build_main_dialog()
+        elif self.dialog_page == 3:
+            self.dialog_page = 1
+            self.build_main_dialog()
+            self.task_state = 0
+            self.config_edit_button(2)
+            self.config_delete_button(0)            
+            self.move(Gui.getMainWindow().frameGeometry().right()/4 *3, Gui.getMainWindow().frameGeometry().top()+271)  # was 800
+        #Gui.Selection.clearSelection()
+        self.setMaximumHeight(self.dialog_height) 
+
+        if self.checked_3d == True:
+            self.set_3d.setChecked(True)
+        else:
+            self.set_3d.setChecked(False) 
+
+
+
+    def on_transparent(self):
+        if self.in_sketcher == True:
+            obj = Gui.ActiveDocument.getInEdit().Object
+            tmp= obj.getParentGeoFeatureGroup() 
+            if hasattr(tmp,'ViewObject'):
+                if tmp.ViewObject.Transparency == 0:  
+                    tmp.ViewObject.Transparency = 62 
+                elif tmp.ViewObject.Transparency == 62:
+                    tmp.ViewObject.Transparency = 0
+        else: 
+            try:
+                obj = FreeCADGui.Selection.getSelection()[0]
+            except:    return
+            if obj.TypeId != "PartDesign::Body": 
+                obj= obj.getParentGeoFeatureGroup() 
+            if hasattr(obj.ViewObject,'Transparency'):
+                if obj.ViewObject.Transparency == 0:
+                    obj.ViewObject.Transparency = 62 
+                elif obj.ViewObject.Transparency == 62:
+                    obj.ViewObject.Transparency = 0 
+
+    def on_x_offset(self):
+        if self.generic_sel != None:
+            obj= self.generic_sel   #.getParentGeoFeatureGroup()
+            obj.Conx_Xoffset = self.x_offset.value()
+            if self.restrict_call == False:
+                self.assy_routine()
+  
+    def on_y_offset(self):
+        if self.generic_sel != None:
+            obj= self.generic_sel   #.getParentGeoFeatureGroup()
+            obj.Conx_Yoffset = self.y_offset.value()
+            if self.restrict_call == False:
+                self.assy_routine()
+
+    def on_z_offset(self):
+        if self.generic_sel != None:
+            obj = self.generic_sel   
+            obj.Conx_Zoffset = self.z_offset.value()
+            if self.restrict_call == False:
+                self.assy_routine()                
+        ##########################################
+    def on_x_rotation(self):
+        if self.generic_sel != None:
+            obj= self.generic_sel 
+            obj.Conx_RotX = self.x_rotation.value()
+            if self.restrict_call == False:
+                self.assy_routine()
+
+    def on_y_rotation(self):
+        if self.generic_sel != None:
+            obj= self.generic_sel 
+            obj.Conx_RotY = self.y_rotation.value()
+            if self.restrict_call == False:
+                self.assy_routine()
+
+    def on_z_rotation(self):
+        if self.generic_sel != None:
+            obj= self.generic_sel 
+            obj.Conx_RotZ = self.z_rotation.value()
+            if self.restrict_call == False:
+                self.assy_routine()
+     
+    def on_axis_Zrot(self): #   Azimuth
+        if self.generic_sel != None:
+            obj= self.generic_sel
+            obj.Conx_ZAxisRot = self.axis_Zrot.value()
+            if self.restrict_call == False:
+                self.assy_routine()
+                
+    def on_axis_Xrot(self):   # Inclination
+        if self.generic_sel != None:
+            obj= self.generic_sel   
+            obj.Conx_XAxisRot  = self.axis_Xrot.value()
+            if self.restrict_call == False:
+                self.assy_routine()
+
+    def on_axis_Yrot(self):   # Inclination
+        if self.generic_sel != None:
+            obj= self.generic_sel   
+            obj.Conx_YAxisRot  = self.axis_Yrot.value()
+            if self.restrict_call == False:
+                self.assy_routine()
+
+       
+    def wbChange(self,name): #######################   Workbench change  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        active = Gui.activeWorkbench().__class__.__name__
+        if active == "SketcherWorkbench":
+            self.in_sketcher = True
+            try:
+                self.Saved_view_1 = Gui.ActiveDocument.ActiveView.getCamera() 
+            except:    
+                print("Can't get camera")
+            
+            if self.dialog_page == 2 or self.dialog_page == 3:
+                self.dialog_page = 1 
+                self.on_toggle_dialog()
+            
+            Gui.activeDocument().activeView().viewTop()
+            self.origin_mover.setEnabled(True)
+            self.origin_mover.setStyleSheet( "color:darkred;")
+            self.timer4.start(0)   # sketcher needs some delay to establish object
+        else:
+            if self.dialog_page == 1:
+                self.dialog_page = 2
+                self.on_toggle_dialog()
+            self.in_sketcher = False
+            self.origin_mover.setEnabled(False)
+            self.origin_mover.setStyleSheet( "color:gray;")
+
+    def timed_out4(self):
+        self.timer4.stop()
+        if self.set_3d.isChecked():
+            Gui.ActiveDocument.ActiveView.setCamera(self.Saved_view_1 )
+        
+    def on_origin_mover(self):  
+        if self.origin_mover.isChecked():
+            self.origin_mover.setText("Pick Vertex\nor tree Sketch") 
+        else:
+            self.origin_mover.setText("Reposition\nSketch origin ") 
+        Gui.Selection.clearSelection() 
+
+    def on_manual_update(self):
+        self.order_stacks()  
+        self.assy_routine()      
+        return
+
+
+    def assy_routine(self):
+        if self.lock2 == False:
+            self.lock2 = True
+            doc = FreeCAD.ActiveDocument
+            if doc:
+                max_count = 1000
+                self.current_level = 10 # set this to zero because we add 10 right away
+                self.max_level = 10
+                while self.max_level>= self.current_level and max_count > 0: 
+                    max_count -= 1
+                    self.current_level += 10
+                    for self.doc_objs in doc.Objects:  # LOOK THRU THE DOC
+                        if self.doc_objs.TypeId == "PartDesign::Body":  #IF BODY
+                            if hasattr(self.doc_objs,'Conx_BindTo'):
+                                if self.doc_objs.Conx_Level > self.max_level :  # found another level
+                                    self.max_level = self.doc_objs.Conx_Level     
+                                if self.doc_objs.Conx_Level == self.current_level: #or self.doc_objs.Conx_Level == 11:     # INCREMENTS OF 10      
+                         
+                                    self.go_ASM(self.doc_objs.Conx_BindTo,self.doc_objs)
+                                       
+        self.lock2 = False
+
+    def go_ASM(self,my_sketch,my_body):
+        my_body.Placement.Base.x = 0
+        my_body.Placement.Base.y = 0
+        try:
+            self.sk_att = my_sketch.AttachmentOffset.copy()
+        except: return   
+        self.sk_plc = my_sketch.Placement.copy()
+
+        my_sketch.Placement.Matrix.rotateY(math.radians(my_body.Conx_YAxisRot))
+        my_sketch.Placement.Matrix.rotateX(math.radians(my_body.Conx_XAxisRot))
+        my_sketch.Placement.Matrix.rotateZ(math.radians(my_body.Conx_ZAxisRot))    
+     
+        delta_global = App.Placement (App.Vector(my_body.Conx_Xoffset,my_body.Conx_Yoffset,my_body.Conx_Zoffset),App.Rotation(my_body.Conx_RotZ,my_body.Conx_RotY,my_body.Conx_RotX),App.Vector(0,0,0))  #  add in DD Rotation
+        my_sketch.Placement = my_sketch.Placement.multiply(delta_global) # use the changed copy placement to build new Placement  
+        try:
+            rot_orig = FreeCAD.ActiveDocument.getObject(my_sketch.Name).getGlobalPlacement()    # build rotation with placement copy   
+        except: return             
+        prt_rot = my_body.getGlobalPlacement().multiply(my_body.Placement.inverse()) 
+        my_body.Placement = prt_rot.inverse().multiply(rot_orig)  
+
+        my_sketch.AttachmentOffset = self.sk_att  # copy back in the attachment offset
+        my_sketch.Placement = self.sk_plc   # copy back in the placement   
+              
+  
+    def on_build_bind_data(self,body_ob):
+        if not hasattr(body_ob,'Conx_BindTo'):
+            if not hasattr(body_ob,"Conx_BindTo"):
+                body_ob.addProperty("App::PropertyLinkHidden","Conx_BindTo")
+            if not hasattr(body_ob,"Conx_Level"):
+                body_ob.addProperty("App::PropertyInteger","Conx_Level")
+            if not hasattr(body_ob,"Conx_Link"):
+                body_ob.addProperty("App::PropertyInteger","Conx_Link")
+            if not hasattr(body_ob,"Conx_RotX"):
+                body_ob.addProperty("App::PropertyFloat","Conx_RotX")
+            if not hasattr(body_ob,"Conx_RotY"):
+                body_ob.addProperty("App::PropertyFloat","Conx_RotY")
+            if not hasattr(body_ob,"Conx_RotZ"):
+                body_ob.addProperty("App::PropertyFloat","Conx_RotZ")
+            if not hasattr(body_ob,"Conx_ZAxisRot"):
+                body_ob.addProperty("App::PropertyFloat","Conx_ZAxisRot")
+            if not hasattr(body_ob,"Conx_XAxisRot"):
+                body_ob.addProperty("App::PropertyFloat","Conx_XAxisRot")
+            if not hasattr(body_ob,"Conx_YAxisRot"):
+                body_ob.addProperty("App::PropertyFloat","Conx_YAxisRot")
+            if not hasattr(body_ob,"Conx_Xoffset"):
+                body_ob.addProperty("App::PropertyFloat","Conx_Xoffset")
+            if not hasattr(body_ob,"Conx_Yoffset"):
+                body_ob.addProperty("App::PropertyFloat","Conx_Yoffset")
+            if not hasattr(body_ob,"Conx_Zoffset"):
+                body_ob.addProperty("App::PropertyFloat","Conx_Zoffset")
+         
+   
+    def on_remove_bind(self):     
+        if hasattr(self.body_source,'Conx_BindTo'):
+            if self.body_source.Conx_BindTo != None:  
+                self.tmp_string = self.body_source.Label2    # REMOVE FROM BODY obj
+                self.text =  self.body_source.Conx_BindTo.Label + ">" 
+                self.temp_text = self.tmp_string.replace(self.text,'') 
+                self.body_source.Label2 = self.temp_text
+
+                self.body_source.Conx_Level = 10  
+                self.body_source.Conx_BindTo = None
+
+                self.order_stacks()  
+                self.set_ob_selects(False)
+                self.instruct_line.setStyleSheet( "color:gray;")    
+                self.on_manual_update()
+ 
+
+
+        
+  
+
+##########*******************************************************************
+####      CREATE 
+    def create_a_bind(self):   #
+        if self.sketch_target.TypeId == "Sketcher::SketchObject":  # Can't bind to CURRENT BODY "return"
+            tmp_bod = self.sketch_target.getParentGeoFeatureGroup() 
+            if tmp_bod.Name == self.body_source.Name:
+                return
+                        
+############################# 
+        # TARGET DATA HANDLING
+        if not hasattr(self.body_source,'Conx_BindTo'):  
+            self.on_build_bind_data(self.body_source)
+
+        self.body_source.Conx_BindTo = self.sketch_target
+        self.lower_sketch = self.body_source.Conx_BindTo  
+        self.lower_body = self.lower_sketch.getParentGeoFeatureGroup() 
+
+        if not hasattr(self.lower_body,'Conx_BindTo'):  # if lower body has binding properties  
+            self.on_build_bind_data(self.lower_body)
+   
+
+        self.input_step = 0
+        doc = FreeCAD.ActiveDocument
+        if self.body_source and self.sketch_target and doc:
+            if not hasattr(self.body_source,'Conx_BindTo'):
+                return  
+            self.body_source.Conx_BindTo = self.sketch_target
+            current_text = self.body_source.Label2
+            target_text = self.sketch_target.Label   + ">" 
+            self.body_source.Label2 = target_text +  current_text     
+            bod =  self.sketch_target.getParentGeoFeatureGroup()     
+            current_text = bod.Label2
+            bod.Label2 =  current_text 
+
+        self.order_stacks()
+        self.assy_routine()
+        self.assy_routine()  
+
+    def order_stacks(self):
+        doc = FreeCAD.ActiveDocument
+        if doc:
+            for seek_out in doc.Objects:  # LOOK THRU THE DOC
+                if seek_out.TypeId == "PartDesign::Body":  #make it even so it is searched
+                    if hasattr(seek_out,'Conx_BindTo'):
+                 #       print(seek_out.Name)
+                        if seek_out.Conx_BindTo != None:
+                            seek_sketch = seek_out.Conx_BindTo
+                            count = 100
+                            self.level_count = 0
+                            while seek_sketch != None and count > 0:  # looking at lowers 
+                                count -= 1
+                                self.level_count += 1
+                                self.target_bod = seek_sketch.getParentGeoFeatureGroup()
+                                if hasattr(self.target_bod,'Conx_BindTo'):  # add error detect
+                                    if self.target_bod.Conx_BindTo != None:                                
+                                        seek_sketch = self.target_bod.Conx_BindTo
+                                    else:
+                               #         print(" Done",self.level_count)
+                                        count = -1
+                                else:
+                              #      print(",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Broken build link !",self.level_count)  # add error detect
+                                    count = -1      
+                        
+                            if count < 0:  # found something"
+                                self.level_num = (self.level_count * 10) + 10
+                                seek_out.Conx_Level = self.level_num
+                       #         print("                  writing  .........",seek_out.Name,self.level_num)
+                                seek_sketch = seek_out.Conx_BindTo
+                                count = 100
+                                while seek_sketch != None and count > 0:  # looking at lowers 
+                                    count -= 1
+                                    self.level_num -= 10
+                                    #target_bod = seek_sketch.getParentGeoFeatureGroup()
+                            #        print("                  writing  .........",self.target_bod.Name,self.level_num)
+                                    self.target_bod.Conx_Level = self.level_num
+                                    if hasattr(self.target_bod,'Conx_BindTo'):  # add error detect
+                                        if self.target_bod.Conx_BindTo != None:                                
+                                            seek_sketch = self.target_bod.Conx_BindTo
+                                        else:
+                                        #    print("            Write Done",self.level_num)
+                                            count = -1
+                                    else:
+                                  #      print(",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Error write Done",self.level_count)  # add error detect
+                                        count = -1       
+                            else: 
+                                print("Error!!!! Loop detected. ")
+                                return
+                        else:
+                            seek_out.Conx_Level = 10
+
+    def on_del_button(self):  #  LOWER BUTTON
+        if self.body_source == None:
+            print("Error!  No selection")
+            return
+        if self.Button2_pointer == 1: # remove the binding
+            self.on_remove_bind()
+            self.body_source.Conx_Level = 10
+            self.config_edit_button(3)
+            self.config_delete_button(2)
+            self.Button2_pointer = 2 # 1= binding, 2= properties
+            self.task_state = 1
+            Gui.Selection.clearSelection()
+         
+        elif self.Button2_pointer == 2:  # remove properties and all
+            self.Button2_pointer = 1
+            self.config_edit_button(3)
+            self.config_delete_button(0)
+            self.task_state = 0
+            if hasattr(self.body_source,'Conx_BindTo'): 
+                target_text = self.body_source.Label2 
+                stat = target_text.find(">",0,30)
+                if stat > 0:
+                    text_short = target_text[stat +1:] 
+                    self.body_source.Label2 =  text_short  
+            self.body_source.removeProperty("Conx_Zoffset") 
+            self.body_source.removeProperty("Conx_Xoffset")
+            self.body_source.removeProperty("Conx_Yoffset") 
+            self.body_source.removeProperty("Conx_RotX")
+            self.body_source.removeProperty("Conx_RotY")
+            self.body_source.removeProperty("Conx_RotZ")
+            self.body_source.removeProperty("Conx_BindTo") 
+            self.body_source.removeProperty("Conx_ZAxisRot")
+            self.body_source.removeProperty("Conx_XAxisRot")
+            self.body_source.removeProperty("Conx_YAxisRot")
+            self.body_source.removeProperty("Conx_Level")   
+            self.body_source.removeProperty("Conx_Link") 
+            Gui.Selection.clearSelection()
+
+
+########################    MOUSE INPUT
+    def process_mouse_selects(self,pos):
+        if self.pass_click == True:
+            self.pass_click = False
+            return
+        if self.in_process_click == False:  # LOCKOUT
+            self.in_process_click = True
+
+        try:
+            obj =  FreeCADGui.Selection.getSelection()[0]
+        except:   
+            self.in_process_click = False 
+            return
+     #   print(".........................")
+  ###########   page 3     
+        if self.dialog_page == 3 and self.in_sketcher == False:    
+            p = Gui.ActiveDocument.ActiveView.getCursorPos() 
+            self.listObjects = Gui.ActiveDocument.ActiveView.getObjectsInfo(p)
+            if pos[0]== 0.0 and pos[1] == 0.0 and pos[2] == 0.0:
+          #      print("Your selecting in the Tree")
+                if obj.TypeId == "Sketcher::SketchObject" and self.task_state == 1 :
+                #    print("found sketch in Tree")
+                    self.task_state = 0 
+                    self.sketch_target = obj
+                    self.config_edit_button(1)
+                    self.config_delete_button(1)
+                    self.create_a_bind()  ## <<<<<<<<<<<<<< create binding
+                    self.order_stacks()
+                    Gui.Selection.clearSelection()
+                self.task_state = 0 
+
+            else:
+            #    print("\nSelecting in the 3D")
+                if str(type(obj)) == "<class 'PartDesign.Feature'>": #  or  obj.TypeId == "PartDesign::Body": # and not obj.TypeId == "App::Part": 
+                    self.ob2 =  FreeCADGui.Selection.getSelectionEx('', 0)
+                    self.body_source = obj.getParentGeoFeatureGroup() 
+                    self.Body_sel(3)   # change selection to Body  
+                if obj.TypeId == "Sketcher::SketchObject" and self.task_state == 1 :
+                    self.task_state = 0 
+                    self.sketch_target = obj
+                    self.config_edit_button(1)
+                    self.config_delete_button(1)
+                    self.create_a_bind()  ## <<<<<<<<<<<<<< create binding
+                    self.order_stacks()
+                    Gui.Selection.clearSelection()
+                    self.task_state = 0 
+          
+ 
+
+  ###########   page 1                             
+        if self.dialog_page == 1:    # IN ASSY EDIT MODE
+            if pos[0]== 0.0 and pos[1] == 0.0 and pos[2] == 0.0:
+                try:
+                    self.set_ob_selects(False)
+                    if obj.TypeId == "PartDesign::Body":
+                        if hasattr(obj,'Conx_BindTo'):    # if binding
+                            if obj.Conx_BindTo == None:
+                                self.set_ob_selects(False)
+                            else:
+                                self.set_ob_selects(True)
+                                self.update_inputs(obj)
+                except:  None
+    
+            else:
+                if str(type(obj)) == "<class 'PartDesign.Feature'>"  or  obj.TypeId == "PartDesign::Body": # and not obj.TypeId == "App::Part": 
+                    if obj.TypeId != "PartDesign::Body":
+                        self.body_source = obj.getParentGeoFeatureGroup()  
+                        self.ob2 =  FreeCADGui.Selection.getSelectionEx('', 0)
+                        self.Body_sel(1)   # change selection to Body
+                        if hasattr(self.body_source,'Conx_BindTo'):    # if binding
+                            if self.body_source.Conx_BindTo == None:
+                                self.set_ob_selects(False)
+                            else:
+                                self.set_ob_selects(True)
+                                self.update_inputs(self.body_source)
+                    else:
+                        self.set_ob_selects(False)
+    
+                if obj.TypeId == "App::Part":   # No Part container selecting while in edit mode
+               #     print("clear")
+                    Gui.Selection.clearSelection()                
+
+  ###########   page 2    
+        if self.dialog_page == 2: 
+            self.sketch_vertex_mover(obj)
+            if str(type(obj)) == "<class 'PartDesign.Feature'>"  or  obj.TypeId == "PartDesign::Body": # and not obj.TypeId == "App::Part": 
+                if obj.TypeId != "PartDesign::Body":
+                    self.body_of = obj.getParentGeoFeatureGroup()  
+            self.show_sketch_coords(obj) 
+       
+        self.in_process_click = False 
+
+
+
+    def Body_sel(self,path):  # add timer, the delay is for FreeCAD to switch to a selection
+        self.set_path = path
+        if self.in_sketcher  == False:
+            self.timer3.start(0)
+
+    def timed_out3(self):  # this will convert a 3D selection to a Body selection
+        self.timer3.stop()
+        self.found_bod = False    
+   #     if obj.TypeId != "PartDesign::Body":
+        for sel in self.ob2:   # reading in self.ob2 as the feature
+            self.bodyPath = ''
+            for path in sel.SubElementNames:
+                Gui.Selection.clearSelection()
+                self.splitPath = path.split('.')
+                for self.sum in self.splitPath: # extract the path for Body selection
+                    self.bodyPath += self.sum + '.'
+                    if self.sum[0:4] == 'Body':
+                        self.found_bod = True
+                        break
+            self.pass_click = True
+            if self.found_bod == True:
+                Gui.Selection.addSelection(sel.DocumentName, sel.ObjectName, self.bodyPath)  
+            else:     #make selection active in the tree , it also fires the selection slot
+                Gui.Selection.addSelection(sel.DocumentName, sel.ObjectName)
+#        else:
+#            self.ob2
+ 
+        if self.set_path == 1:
+            obj =  FreeCADGui.Selection.getSelection()[0]
+            self.body_source = obj
+            if obj.TypeId == "PartDesign::Body":  # the code addselection() triggers selection again with a body object
+                if hasattr(obj,'Conx_BindTo'):    # if binding
+                    if obj.Conx_BindTo != None:
+                        self.set_ob_selects(True)
+                        self.update_inputs(obj)
+                    else:
+                        self.set_ob_selects(False)
+                        self.update_inputs(obj)
+
+        if self.set_path == 3:
+            obj =  FreeCADGui.Selection.getSelection()[0]
+            self.body_source = obj
+            if obj.TypeId == "PartDesign::Body":  # the code addselection() triggers selection again with a body object
+                if hasattr(obj,'Conx_BindTo'):    # if binding
+                    if obj.Conx_BindTo == None:
+                    #    print("Empty")
+                        self.config_edit_button(3)  # 3 = Body
+                        self.config_delete_button(2)
+                        self.Button2_pointer = 1
+                        self.task_state = 1
+                    else:
+                    #    print("full")
+                        self.config_delete_button(1)
+                        self.config_edit_button(1)
+                        self.Button2_pointer = 1 # 1= binding, 2= properties
+                        self.task_state = 0
+                else:  
+                #    print("No bind")
+                    self.config_edit_button(3)  # 3 = select a sketch
+                    self.config_delete_button(0)
+                    self.task_state = 1
+
+
+
+
+    def show_sketch_coords(self,obj): 
+        if obj.TypeId == "Sketcher::SketchObject":
+            self.x_base = "X = " + str(round(obj.AttachmentOffset.Base.x,6))
+            self.sketch_x_offset.setText(self.x_base)
+            self.sketch_x_offset.setStyleSheet( "color:black;")
+            self.y_base = "Y = " + str(round(obj.AttachmentOffset.Base.y,6))
+            self.sketch_y_offset.setText(self.y_base)
+            self.sketch_y_offset.setStyleSheet( "color:black;")
+        else:
+            self.sketch_x_offset.setText("X= ____")
+            self.sketch_y_offset.setText("Y= ____")
+            self.sketch_x_offset.setStyleSheet( "color:gray;")
+            self.sketch_y_offset.setStyleSheet( "color:gray;")
+            if obj.TypeId == "PartDesign::Body":
+                if hasattr(obj,'Conx_BindTo'): 
+                    self.update_inputs(obj)                   
+
+   
+    def set_ob_selects(self,logic):
+        self.x_offset.setEnabled(logic)
+        self.y_offset.setEnabled(logic)
+        self.z_offset.setEnabled(logic)
+        self.axis_Zrot.setEnabled(logic)
+        self.axis_Xrot.setEnabled(logic)
+        self.axis_Yrot.setEnabled(logic)
+        self.z_rotation.setEnabled(logic)
+        self.x_rotation.setEnabled(logic) 
+        self.y_rotation.setEnabled(logic)
+        self.z_rotation.setEnabled(logic)  
+
+        if logic == False:
+            self.axis_Zrot.setStyleSheet( "color:gray;") 
+            self.axis_Xrot.setStyleSheet( "color:gray;")
+            self.axis_Yrot.setStyleSheet( "color:gray;")
+            self.x_rotation.setStyleSheet( "color:gray;")
+            self.y_rotation.setStyleSheet( "color:gray;")
+            self.z_rotation.setStyleSheet( "color:gray;")
+            self.x_offset.setStyleSheet( "color:gray;")
+            self.y_offset.setStyleSheet( "color:gray;")
+            self.z_offset.setStyleSheet( "color:gray;")
+            self.x_rotation.setStyleSheet( "color:gray;")
+            self.y_rotation.setStyleSheet( "color:gray;")
+            self.z_rotation.setStyleSheet( "color:gray;")
+            self.sketch_x_offset.setStyleSheet( "color:gray;")
+            self.sketch_y_offset.setStyleSheet( "color:gray;")
+          
+        else:
+            self.axis_Zrot.setStyleSheet( "color:black;")   
+            self.axis_Xrot.setStyleSheet( "color:black;")  
+            self.axis_Yrot.setStyleSheet( "color:black;")  
+            self.x_rotation.setStyleSheet( "color:black;")  
+            self.y_rotation.setStyleSheet( "color:black;")  
+            self.z_rotation.setStyleSheet( "color:black;")  
+            self.x_offset.setStyleSheet( "color:black;")
+            self.y_offset.setStyleSheet( "color:black;")
+            self.z_offset.setStyleSheet( "color:black;")
+            self.x_rotation.setStyleSheet( "color:black;")
+            self.y_rotation.setStyleSheet( "color:black;")
+            self.z_rotation.setStyleSheet( "color:black;")
+          
+
+    def update_inputs(self,obj):
+        self.restrict_call = True
+        self.generic_sel = obj
+        if hasattr(obj,'Conx_RotX'):
+            self.x_rotation.setValue(obj.Conx_RotX )
+        if hasattr(obj,'Conx_RotY'):
+            self.y_rotation.setValue(obj.Conx_RotY )
+        if hasattr(obj,'Conx_RotZ'):
+            self.z_rotation.setValue(obj.Conx_RotZ )  #self.rot_angle.value()
+        if hasattr(obj,'Conx_ZAxisRot'):
+            self.axis_Zrot.setValue(obj.Conx_ZAxisRot ) 
+        if hasattr(obj,'Conx_XAxisRot'):
+            self.axis_Xrot.setValue(obj.Conx_XAxisRot ) 
+        if hasattr(obj,'Conx_YAxisRot'):
+            self.axis_Yrot.setValue(obj.Conx_YAxisRot ) 
+        if hasattr(obj,'Conx_Xoffset'):
+            self.x_offset.setValue(obj.Conx_Xoffset ) 
+        if hasattr(obj,'Conx_Yoffset'):
+            self.y_offset.setValue(obj.Conx_Yoffset ) 
+        if hasattr(obj,'Conx_Zoffset'):
+            self.z_offset.setValue(obj.Conx_Zoffset ) 
+
+        self.restrict_call = False
+
+    def config_edit_button(self,state):  # UPPER BUTTON
+        if state == 0:
+            self.instruct_line.setEnabled(False)
+            self.instruct_line.setText("\n -------------\n")
+            self.instruct_line.setStyleSheet( "color:black;") 
+            self.instruct_line.setStyleSheet("background-color:khaki;")  
+            return
+        elif state == 1:
+            self.instruct_line.setEnabled(True)
+            self.instruct_line.setText(">  Bind Detected   <\n\n  Delete or Position")
+            self.instruct_line.setStyleSheet( "color:black;") 
+            self.instruct_line.setStyleSheet("background-color:yellow;")
+            return
+        elif state == 2:
+            self.instruct_line.setEnabled(True)
+            self.instruct_line.setText("> Select an Object  <\n\n   In the 3D space")
+            self.instruct_line.setStyleSheet( "color:black;")  # set the remove button
+            self.instruct_line.setStyleSheet("background-color:lime;")  
+            return
+        elif state == 3:
+            self.instruct_line.setEnabled(True)
+            self.instruct_line.setText(">   Select a Sketch   <\n\n   In the tree or 3D ")
+            self.instruct_line.setStyleSheet( "color:black;") 
+            self.instruct_line.setStyleSheet("background-color:greenyellow;")  
+            return  
+
+
+    def config_delete_button(self,state):   # LOWER BUTTON
+        if state == 0:
+            self.del_button.setText("  -------------  ")
+            self.del_button.setEnabled(True)
+            self.del_button.setStyleSheet( "color:black;")   
+            return                  
+        elif state == 1:
+            self.del_button.setText("Delete Binding")
+            self.del_button.setEnabled(True)
+            self.del_button.setStyleSheet( "color:black;") 
+            return
+        elif state == 2:
+            self.del_button.setText("Del Properties ")
+            self.del_button.setEnabled(True)
+            self.del_button.setStyleSheet( "color:red;")  # set the remove button
+            return   
+
+    def sketch_vertex_mover(self,obj):
+        if self.origin_mover.isChecked():
+            try: 
+                self.my_sk = Gui.ActiveDocument.getInEdit().Object 
+            except: return
+            self.sel = Gui.Selection.getSelectionEx()
+            try:
+                self.search_name = self.sel[0].SubElementNames[0]                
+                self.result = self.search_name.find("Vertex")
+                self.logic_vertex = True
+            except:
+                self.logic_vertex = False             
+            if self.logic_vertex == False and obj.TypeId == "Sketcher::SketchObject":
+                self.my_sk.AttachmentOffset = obj.AttachmentOffset
+                self.origin_mover.setChecked(False) 
+                self.origin_mover.setText("Reposition\nSketch origin ") 
+                self.assy_routine()    
+                return
+            self.sel = Gui.Selection.getSelectionEx()
+            for so in self.sel:
+                for sub in so.SubElementNames:
+                    try:
+                        self.current_index = eval(sub.lstrip('Vertex'))
+                    except:
+                        return
+                    self.geo, self.pos = so.Object.getGeoVertexIndex(self.current_index-1) 
+                    self.point_local = so.Object.getPoint(self.geo, self.pos ) 
+                    self.my_sketch = Gui.ActiveDocument.getInEdit().Object 
+                    self.attach = self.my_sketch.AttachmentOffset
+                    self.my_sketch.AttachmentOffset.Base.x = 0.0
+                    self.my_sketch.AttachmentOffset.Base.y = 0.0
+                    for i,geo in enumerate(self.my_sketch.Geometry):
+                        if (hasattr(geo, 'X') and hasattr(geo, 'Y') and hasattr(geo, 'Z')):
+                            self.point = geo.copy()
+                            App.getDocument(FreeCAD.ActiveDocument.Name).getObject(self.my_sketch.Name).delGeometries([i])     
+                            self.point.translate(self.attach.Base)
+                            self.point.rotate(self.attach)
+                            self.my_sketch.AttachmentOffset.Base.x += self.point.X
+                            self.my_sketch.AttachmentOffset.Base.y += self.point.Y
+                            FreeCAD.ActiveDocument.recompute()
+                            self.x_base = "X = " + str(round(self.my_sk.AttachmentOffset.Base.x,6))
+                            self.sketch_x_offset.setText(self.x_base)
+                            self.sketch_x_offset.setStyleSheet( "color:black;")
+                            self.y_base = "Y = " + str(round(self.my_sk.AttachmentOffset.Base.y,6))
+                            self.sketch_y_offset.setText(self.y_base)
+                            self.sketch_y_offset.setStyleSheet( "color:black;")
+                            
+                            break   
+            self.origin_mover.setChecked(False) 
+            self.origin_mover.setText("Reposition\nSketch origin ")          
+            self.assy_routine()  
+  
+ 
+#######################################################################        
+##########################                             ################################   
+
+    def on_create_doc(self,data): # Callback "created" This will trigger the timer below
+        self.paste_lock.setChecked(True)
+     #   print("doc")
+
+
+
+    def on_create_timer(self,data): # Callback "created" This will trigger the timer below
+    #    print(data)
+   #     print("create")
+        self.app_part = False            
+        if data.TypeId == "PartDesign::Body" or data.TypeId == "App::Part":
+            self.paste_list.append(data)
+            if data.TypeId == "App::Part":
+                self.app_part = True
+      #      print(".....................",data)
+            self.timer2.start(1500)  # this will timeout and call "timed_out2"  below    
+
+    def timed_out2(self):
+        self.timer2.stop()
+     #     print("paste")  
+        doc = FreeCAD.ActiveDocument
+        for self.body_ob in doc.Objects:  # LOOK THRU THE DOC        
+            if hasattr(self.body_ob,'Conx_BindTo'):            
+                if self.body_ob.Conx_BindTo != None:  # update the labels in Description field
+                    self.target_text = self.body_ob.Label2
+                    self.stat = self.target_text.find(">",0,30)
+                    if self.stat > 0:
+                        self.text_short = self.target_text[self.stat +1:]  
+                    self.local_text = self.body_ob.Conx_BindTo.Label + ">"
+                    if self.local_text != self.text_short: 
+                        self.body_ob.Label2 =  self.local_text + self.text_short 
+
+        detected_part = False
+        for self.list_pick in self.paste_list:  # this will move the entire PART
+            if self.list_pick.TypeId == "App::Part"  and not self.paste_lock.isChecked():
+                self.detected_part = True
+                if  not self.paste_lock.isChecked():
+                    self.my_placement = self.list_pick.getGlobalPlacement()
+                    self.my_placement.Base.x += 125 + self.paste_offset
+                    self.my_placement.Base.y += 125 + self.paste_offset
+                    self.my_placement.Base.z += 115 + self.paste_offset
+                    self.list_pick.Placement = self.my_placement
+                self.paste_offset += 2
+                if self.paste_offset > 20:
+                    self.paste_offset =0
+
+        if detected_part == False:  # This move BODIES
+            for self.list_pick in self.paste_list:
+                if self.list_pick.TypeId == "PartDesign::Body" and not self.paste_lock.isChecked():
+                #    print(self.list_pick)
+                    self.body_pick = self.list_pick
+                    self.target_text = self.body_pick.Label2 
+                    self.stat = self.target_text.find(">",0,30)
+                    if self.stat > 0:
+                        self.target_text = self.target_text[self.stat +1:]  
+                        self.body_pick.Label2 = self.target_text
+
+                        self.body_pick.Conx_Level = 0
+                        self.body_pick.Conx_BindTo = None
+
+                        try:
+                            self.my_placement = self.body_pick.getGlobalPlacement()
+                            self.my_placement.Base.x += 25 + self.paste_offset
+                            self.my_placement.Base.y += 25 + self.paste_offset
+                            self.my_placement.Base.z += 15 + self.paste_offset
+                            self.list_pick.Placement = self.my_placement
+    
+                        except:    None   
+                    
+            self.paste_offset += 2
+            if self.paste_offset > 20:
+                self.paste_offset =0
+        self.paste_list.clear()
+        Gui.Selection.clearSelection() 
+        self.assy_routine()
+    
+#############################################
+    def get_sketcher_settings(self):
+        self.SyncPlacement = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/TreeView").GetBool("SyncPlacement")  
+ #       FreeCAD.ParamGet("User parameter:BaseApp/Preferences/TreeView").SetBool("SyncSelection",True)
+        self.EnablePreselection = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View").GetBool("EnablePreselection")   
+        self.RestoreCamera = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").GetBool("RestoreCamera") 
+        self.HideDependent = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").GetBool("HideDependent")   
+        self.ShowSupport = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").GetBool("ShowSupport")   
+        self.EnableAnimation = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").GetBool("EnableAnimation")   
+
+
+    def set_sketcher_settings(self):
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/TreeView").SetBool("SyncPlacement",self.SyncPlacement)  
+ #       FreeCAD.ParamGet("User parameter:BaseApp/Preferences/TreeView").SetBool("SyncSelection",True)
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View").SetBool("EnablePreselection",self.EnablePreselection)   
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").SetBool("RestoreCamera",self.RestoreCamera) 
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").SetBool("HideDependent",self.HideDependent)   
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").SetBool("ShowSupport",self.ShowSupport)   
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").SetBool("EnableAnimation",self.EnableAnimation)   
+
+        for name,doc in App.listDocuments().items():
+            for sketch in doc.findObjects('Sketcher::SketchObject'):
+                sketch.ViewObject.HideDependent = self.HideDependent
+                sketch.ViewObject.ShowSupport = self.ShowSupport
+                sketch.ViewObject.RestoreCamera = self.RestoreCamera
+
+    def set_3D_settings(self):
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/TreeView").SetBool("SyncPlacement",True)  
+ #       FreeCAD.ParamGet("User parameter:BaseApp/Preferences/TreeView").SetBool("SyncSelection",True)
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/View").SetBool("EnablePreselection",False)   
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").SetBool("RestoreCamera",False) 
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").SetBool("HideDependent",False)   
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").SetBool("ShowSupport",True)   
+        FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Sketcher/General").SetBool("EnableAnimation",False)   
+
+        for name,doc in App.listDocuments().items():
+            for sketch in doc.findObjects('Sketcher::SketchObject'):
+                sketch.ViewObject.HideDependent = False
+                sketch.ViewObject.ShowSupport = False
+                sketch.ViewObject.RestoreCamera = False
+
+ 
+###########################################
+
+    def on_commit(self,data):
+        #print("px")
+        self.assy_routine()
+
+    def on_deleted(self,data): # Thie could trigger the timer below
+        #print("delete",data)
+        self.timer5.start(500)  # this will timeout and call "timed_out2"  below  
+  
+    def timed_out5(self):
+        #print("p5")
+        self.timer5.stop() 
+        self.order_stacks()
+
+    def on_undo(self,data):
+        #print("undo")
+        self.timer5.start(500)
+
+    def on_exit(self):
+        self.set_sketcher_settings()
+  #      v=Gui.ActiveDocument.ActiveView        
+        App.removeDocumentObserver(do)
+        FreeCADGui.Selection.removeObserver(s)
+        self.timer6.start(500)       #  self.on_click_code
+        #print("Bye")
+    def timed_out6(self):
+        self.close()
+    
+########################
+    def on_clear(self,tmp): # extra mouse selection call when nothing is clicked on
+        if self.dialog_page == 3:  
+            #print("clear")
+            # this fires alone on a NO selection
+            self.set_ob_selects(False) 
+            self.config_delete_button(0)    # 0 = bars
+            self.config_edit_button(2)     # 3 is body select
+        
+         
+            
+    def on_immediate_prop_change(self,data):
+     #   print("pv")
+        self.assy_routine()
+
+    class ViewObserver:
+        class SelObserver:
+            def addSelection(self,document, object, element, position):
+                visCB.process_mouse_selects(position)
+    
+            def clearSelection(self,doc):
+                visCB.on_clear(doc)  # this tells me when nothing is selected in the tree
+
+    class DocObserver:
+        def slotCommitTransaction(self, data):   #this is the slot for drag/drop
+            visCB.on_commit(data)
+
+        def slotOpenTransaction(self, data,data1):  # dont erase,broke
+            visCB.on_immediate_prop_change(data)
+
+        def slotCreatedDocument(self, data):
+            visCB.on_create_doc(data)
+
+        def slotCreatedObject(self, data):
+            visCB.on_create_timer(data)
+
+        def slotDeletedObject(self, data):
+            visCB.on_deleted(data)
+
+        def slotUndoDocument(self, data):  # dont erase
+            visCB.on_undo(data)
+ 
+visCB = cbToolBox() 
+v=Gui.ActiveDocument.ActiveView
+o = visCB.ViewObserver()
+s=o.SelObserver()
+FreeCADGui.Selection.addObserver(s)
+
+do = visCB.DocObserver()
+App.addDocumentObserver(do) 
+  
+visCB.show()
+
+
+
+
+
+
+
+
