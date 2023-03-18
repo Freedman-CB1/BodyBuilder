@@ -9,9 +9,9 @@
  # --------------------
 __Title__=""
 __Author__ = "freedman"
-__Version__ = "1.0"
+__Version__ = ""
 __Date__    = "3/01/2023"
-__Requires__ = "Built on 20.246"  #looks like it will work using 0.18
+__Requires__ = "Built on 21.
 __Communication__ = "User:freedman" 
 
 from PySide import QtGui,QtCore
@@ -23,7 +23,7 @@ import Draft
 import string
 import DraftVecUtils
 
-Version_name = "BodyBuilder4.1"
+Version_name = "BodyBuilder4.2"
 
 doc = FreeCAD.ActiveDocument                   
 if doc == None:
@@ -943,8 +943,12 @@ class cbToolBox(QtGui.QDockWidget):
                 try:
                     self.set_ob_selects(False)
                     if obj.TypeId == "PartDesign::Body":
-                        self.set_ob_selects(True)
-                        self.update_inputs(obj)
+                        if hasattr(obj,'Conx_BindTo'):    # if binding
+                            if obj.Conx_BindTo == None:
+                                self.set_ob_selects(False)
+                            else:
+                                self.set_ob_selects(True)
+                                self.update_inputs(obj)
                 except:  None
     
             else:
@@ -953,11 +957,14 @@ class cbToolBox(QtGui.QDockWidget):
                         self.body_source = obj.getParentGeoFeatureGroup()  
                         self.ob2 =  FreeCADGui.Selection.getSelectionEx('', 0)
                         self.Body_sel(1)   # change selection to Body
-                    else:               
-                        self.set_ob_selects(True)
-                        self.update_inputs(obj)
-                else:
-                    self.set_ob_selects(False)
+                        if hasattr(self.body_source,'Conx_BindTo'):    # if binding
+                            if self.body_source.Conx_BindTo == None:
+                                self.set_ob_selects(False)
+                            else:
+                                self.set_ob_selects(True)
+                                self.update_inputs(self.body_source)
+                    else:
+                        self.set_ob_selects(False)
     
                 if obj.TypeId == "App::Part":   # No Part container selecting while in edit mode
                #     print("clear")
