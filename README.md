@@ -2,7 +2,7 @@
 See image "menu structure"
 
 Usage:
-By creating a binding of a Body to a Sketch the macro will keep them attached, the binding is an aligninment of the Body origin to the sketch 
+By creating a binding of a Body to a Sketch the macro will keep them attached as long as the macro is running, the binding is an aligninment of the Body origin to the sketch 
 origin. The Body can be positioned (relative to the sketch attachment) after the binding is created. 
 Two important things about selection, (read at least twice):
 1) To create a binding in the Binding menu) the Body has to be selected in the 3D space. 
