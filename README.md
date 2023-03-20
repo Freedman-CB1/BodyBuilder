@@ -42,8 +42,7 @@ Face Ref. Sketch: Click on any planar face and click this option, the maco will 
 POSITIONING MENU:
 To Main button: This will take you back to the main menu
 
-Sketch 3D view: has been described previously
-
+Sketch 3D view: has been described previously.
 X-Ray Selected: Click an object in the 3D and click this button, the object will toggle between total solid and 62% transparent. The macro will only 
 	respond to these values of transparency.
 Edit binding button: This will take you to the edit binding menu Adjustment fields will be described later.
