@@ -47,7 +47,9 @@ X-Ray Selected: Click an object in the 3D and click this button, the object will
 Edit binding button: This will take you to the edit binding menu Adjustment fields will be described later.
 Reposition sketch origin: While in sketch edit, place a vertex anywhere in the sketch and check this box, the sketch origin will move to the vertex.
 More later on this option.
+
 Input step: This is the step increment/decrement when changing the positioning fields.
+
 Update model: This will do a assemble connection update, sometimes required while bindings have changed and your in sketch edit.
 Paste with binding: If checked this will copy all the properties and the bindings with the objects. It's best to reposition a copied object after the paste because the objects will be be stacked exactly on top of the original. Copied exactly, this make since.
 BINDING MENU:To Main button, Sketch 3D view, X-Ray Selected,To Positioning button, Paste with binding have been described previously.
