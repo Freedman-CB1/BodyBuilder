@@ -51,9 +51,13 @@ More later on this option.
 Input step: This is the step increment/decrement when changing the positioning fields.
 
 Update model: This will do a assemble connection update, sometimes required while bindings have changed and your in sketch edit.
+
 Paste with binding: If checked this will copy all the properties and the bindings with the objects. It's best to reposition a copied object after the paste because the objects will be be stacked exactly on top of the original. Copied exactly, this make since.
+
 BINDING MENU:To Main button, Sketch 3D view, X-Ray Selected,To Positioning button, Paste with binding have been described previously.
+
 Builder status area: This will give you feedback as you select objects and will also give you a hint of what to do next. The binding properties are
 	the Body positioning data, the binding (the target sketch object) can be deleted while retaining the binding properties. This is useful if you want 	    to switch a binding from one sketch to another, the Body will stay in the same orientation.
+	
 Delete Binding, Delete Properties: These options will only work on selections from the 3D space. Paste with binding has been described previously: 
  
