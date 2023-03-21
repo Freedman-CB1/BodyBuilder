@@ -43,8 +43,11 @@ POSITIONING MENU:
 To Main button: This will take you back to the main menu
 
 Sketch 3D view: has been described previously.
+
 X-Ray Selected: Click an object in the 3D and click this button, the object will toggle between total solid and 62% transparent. The macro will only respond to these values of transparency.
+
 Edit binding button: This will take you to the edit binding menu Adjustment fields will be described later.
+
 Reposition sketch origin: While in sketch edit, place a vertex anywhere in the sketch and check this box, the sketch origin will move to the vertex.
 More later on this option.
 
